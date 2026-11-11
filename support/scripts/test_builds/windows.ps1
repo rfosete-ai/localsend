@@ -174,7 +174,7 @@ try {
     Set-Location -LiteralPath (Join-Path $RepoRoot 'packages\localsend_isolates\rust_builder\cargokit\build_tool')
     Invoke-Flutter -Arguments @('pub', 'get', '--enforce-lockfile')
     Set-Location -LiteralPath $appRoot
-    Invoke-Flutter -Arguments @('build', 'windows', '--release', '--target-platform', 'windows-x64', '--no-pub')
+    Invoke-Flutter -Arguments @('build', 'windows', '--release', '--no-pub')
 
     $bundle = Join-Path $appRoot 'build\windows\x64\runner\Release'
     foreach ($required in @('localsend_app.exe', 'flutter_windows.dll', 'rust_lib_localsend_app.dll', 'data\icudtl.dat', 'data\flutter_assets')) {

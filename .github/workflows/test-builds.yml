@@ -2,6 +2,12 @@ name: Android and Windows test builds
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        options: [all, android, windows]
+        default: all
   push:
     branches:
       - codex/localsend-test-builds
@@ -9,16 +15,18 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: localsend-test-builds-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
   CARGO_BUILD_JOBS: '2'
 
 jobs:
   android:
     name: Android debug APK
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.platform != 'windows') ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[windows-only]'))
+    concurrency:
+      group: localsend-test-android-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
@@ -88,6 +96,12 @@ jobs:
 
   windows:
     name: Windows x64 portable
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.platform != 'android') ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[android-only]'))
+    concurrency:
+      group: localsend-test-windows-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: windows-latest
     timeout-minutes: 90
     steps:

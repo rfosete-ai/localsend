@@ -16,6 +16,11 @@ The workflow runs on pushes to `codex/localsend-test-builds`, or through
 on the repository's default branch. It uses the Flutter and Rust versions pinned
 by this checkout. Artifacts are retained for 30 days.
 
+Manual dispatch can select one platform or both. On this dedicated test branch,
+a commit message containing `[windows-only]` or `[android-only]` selects that
+platform for a helper-only fix. Omit these markers after shared app/source changes.
+The platforms queue independently so fixing one does not cancel the other.
+
 ## Download and test
 
 Open the completed workflow run in the fork's Actions tab, then download its
