@@ -41,9 +41,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android platform and build tools
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Verify the runner Android SDK
+        run: |
+          test -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          test -f "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ steps.pins.outputs.flutter }}
