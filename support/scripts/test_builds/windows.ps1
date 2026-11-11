@@ -29,10 +29,12 @@ $ErrorActionPreference = 'Stop'
 
 function Invoke-Native {
     param([string]$Executable, [string[]]$Arguments)
-    & $Executable @Arguments
+    $nativeOutput = @()
+    & $Executable @Arguments 2>&1 | Tee-Object -Variable nativeOutput
     $nativeExitCode = $LASTEXITCODE
     if ($nativeExitCode -ne 0) {
-        throw "Native command failed (exit $nativeExitCode): $Executable $($Arguments -join ' ')"
+        $tail = ($nativeOutput | Select-Object -Last 20 | Out-String).Trim()
+        throw "Native command failed (exit $nativeExitCode): $Executable $($Arguments -join ' ')`n$tail"
     }
 }
 

@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: localsend-test-builds-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_BUILD_JOBS: '2'
@@ -62,7 +62,20 @@ jobs:
         env:
           FLUTTER_COMMAND: flutter
           GRADLE_OPTS: -Dorg.gradle.workers.max=2
-        run: bash support/scripts/test_builds/android.sh "$RUNNER_TEMP/localsend-test/android"
+        run: |
+          set +e
+          bash support/scripts/test_builds/android.sh "$RUNNER_TEMP/localsend-test/android" 2>&1 | tee "$RUNNER_TEMP/localsend-android-build.log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$build_status" -ne 0 ]]; then
+            {
+              echo '### Android test build failed'
+              echo '```text'
+              tail -n 80 "$RUNNER_TEMP/localsend-android-build.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$build_status"
       - uses: actions/upload-artifact@v6
         with:
           name: LocalSend-Test-Android
@@ -98,11 +111,15 @@ jobs:
           rustup toolchain install $env:RUST_VERSION --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build and package portable Windows app
-        run: >-
-          ./support/scripts/test_builds/windows.ps1
-          -RepoRoot $env:GITHUB_WORKSPACE
-          -OutputDirectory "$env:RUNNER_TEMP/localsend-test/windows"
-          -FlutterCommand flutter
+        run: |
+          try {
+            ./support/scripts/test_builds/windows.ps1 -RepoRoot $env:GITHUB_WORKSPACE -OutputDirectory "$env:RUNNER_TEMP/localsend-test/windows" -FlutterCommand flutter
+          } catch {
+            $diagnostic = $_.Exception.Message
+            $stack = $_.ScriptStackTrace
+            @('### Windows test build failed', '```text', $diagnostic, $stack, '```') | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            throw
+          }
       - uses: actions/upload-artifact@v6
         with:
           name: LocalSend-Test-Windows-x64
