@@ -1,0 +1,108 @@
+name: Android and Windows test builds
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/localsend-test-builds
+    paths:
+      - .github/workflows/test-builds.yml
+      - support/scripts/test_builds/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: localsend-test-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_BUILD_JOBS: '2'
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - name: Read toolchain pins
+        id: pins
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          flutter = json.load(open('.fvmrc'))['flutter']
+          rust = re.search(r'^channel = "([^"]+)"', open('rust-toolchain.toml').read(), re.M).group(1)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'flutter={flutter}\nrust={rust}\n')
+          PY
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android platform and build tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.pins.outputs.flutter }}
+          channel: stable
+          cache: true
+      - name: Install pinned Rust and Android targets
+        env:
+          RUST_VERSION: ${{ steps.pins.outputs.rust }}
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup target add --toolchain "$RUST_VERSION" aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+      - name: Build and inspect APK
+        env:
+          FLUTTER_COMMAND: flutter
+          GRADLE_OPTS: -Dorg.gradle.workers.max=2
+        run: bash support/scripts/test_builds/android.sh "$RUNNER_TEMP/localsend-test/android"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: LocalSend-Test-Android
+          path: ${{ runner.temp }}/localsend-test/android/
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows x64 portable
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Enable long paths
+        run: git config --system core.longpaths true
+      - uses: actions/checkout@v6
+      - name: Read toolchain pins
+        id: pins
+        shell: pwsh
+        run: |
+          $flutter = (Get-Content .fvmrc -Raw | ConvertFrom-Json).flutter
+          $rust = [regex]::Match((Get-Content rust-toolchain.toml -Raw), '(?m)^channel = "([^"]+)"').Groups[1].Value
+          "flutter=$flutter" >> $env:GITHUB_OUTPUT
+          "rust=$rust" >> $env:GITHUB_OUTPUT
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.pins.outputs.flutter }}
+          channel: stable
+          cache: true
+      - name: Install pinned Rust
+        env:
+          RUST_VERSION: ${{ steps.pins.outputs.rust }}
+        run: |
+          rustup toolchain install $env:RUST_VERSION --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and package portable Windows app
+        run: >-
+          ./support/scripts/test_builds/windows.ps1
+          -RepoRoot $env:GITHUB_WORKSPACE
+          -OutputDirectory "$env:RUNNER_TEMP/localsend-test/windows"
+          -FlutterCommand flutter
+      - uses: actions/upload-artifact@v6
+        with:
+          name: LocalSend-Test-Windows-x64
+          path: ${{ runner.temp }}/localsend-test/windows/
+          if-no-files-found: error
+          retention-days: 30
