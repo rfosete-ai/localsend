@@ -29,11 +29,20 @@ $ErrorActionPreference = 'Stop'
 
 function Invoke-Native {
     param([string]$Executable, [string[]]$Arguments)
-    $nativeOutput = @()
-    & $Executable @Arguments 2>&1 | Tee-Object -Variable nativeOutput
+    $nativeTail = New-Object 'System.Collections.Generic.Queue[string]'
+    & $Executable @Arguments 2>&1 | ForEach-Object {
+        $nativeTail.Enqueue($_.ToString())
+        if ($nativeTail.Count -gt 20) { [void]$nativeTail.Dequeue() }
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+            # Keep stderr visible without adding it to machine-readable stdout.
+            Write-Host $_.ToString()
+        } else {
+            Write-Output $_
+        }
+    }
     $nativeExitCode = $LASTEXITCODE
     if ($nativeExitCode -ne 0) {
-        $tail = ($nativeOutput | Select-Object -Last 20 | Out-String).Trim()
+        $tail = $nativeTail.ToArray() -join "`n"
         throw "Native command failed (exit $nativeExitCode): $Executable $($Arguments -join ' ')`n$tail"
     }
 }
