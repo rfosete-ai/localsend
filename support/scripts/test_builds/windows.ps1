@@ -56,6 +56,30 @@ function Invoke-Flutter {
     }
 }
 
+function Read-FlutterMachineVersion {
+    param([string]$RawOutput, [string]$ExpectedVersion)
+    # A first Flutter invocation can print dependency/bootstrap progress before
+    # its machine JSON. Select the line-delimited object, not that prelude.
+    $jsonMatch = [regex]::Match($RawOutput, '(?ms)^[ \t]*(\{.*\})[ \t]*\r?$')
+    $rawTail = $RawOutput.Substring([Math]::Max(0, $RawOutput.Length - 2000))
+    if (-not $jsonMatch.Success) {
+        throw "Flutter --version --machine did not return a JSON object. Response tail:`n$rawTail"
+    }
+    try {
+        $versionInfo = $jsonMatch.Groups[1].Value | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Flutter --version --machine returned malformed JSON. Response tail:`n$rawTail"
+    }
+    $versionProperty = $versionInfo.PSObject.Properties['frameworkVersion']
+    if ($null -eq $versionProperty -or $versionProperty.Value -isnot [string]) {
+        throw "Flutter version JSON has no string frameworkVersion. Response tail:`n$rawTail"
+    }
+    if ($versionProperty.Value -ne $ExpectedVersion) {
+        throw "Flutter $ExpectedVersion is required; selected Flutter is $($versionProperty.Value)."
+    }
+    return $versionInfo
+}
+
 function Assert-X64Pe {
     param([string]$Path)
     $stream = [System.IO.File]::OpenRead($Path)
@@ -118,10 +142,7 @@ try {
     $commit = ((Invoke-Native -Executable 'git' -Arguments @('rev-parse', 'HEAD')) -join "`n").Trim()
     $trackedChanges = @((Invoke-Native -Executable 'git' -Arguments @('status', '--porcelain=v1', '--untracked-files=no')))
     $flutterVersionJson = (Invoke-Flutter -Arguments @('--version', '--machine')) -join "`n"
-    $flutterInfo = $flutterVersionJson | ConvertFrom-Json
-    if ($flutterInfo.frameworkVersion -ne $flutterPin) {
-        throw "Flutter $flutterPin is required; selected Flutter is $($flutterInfo.frameworkVersion)."
-    }
+    $flutterInfo = Read-FlutterMachineVersion -RawOutput $flutterVersionJson -ExpectedVersion $flutterPin
     $rustVersion = ((Invoke-Native -Executable 'rustup' -Arguments @('run', $rustPin, 'rustc', '--version')) -join "`n").Trim()
 
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null

@@ -11,8 +11,8 @@ artifacts without production signing credentials or store publication:
   build metadata, and checksum. The optional MSIX share-target integration is
   excluded from this portable package.
 
-The workflow runs on pushes to `codex/localsend-test-builds` that change its
-workflow/helpers, or through `workflow_dispatch` once the workflow is available
+The workflow runs on pushes to `codex/localsend-test-builds`, or through
+`workflow_dispatch` once the workflow is available
 on the repository's default branch. It uses the Flutter and Rust versions pinned
 by this checkout. Artifacts are retained for 30 days.
 
